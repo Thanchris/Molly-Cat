@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mochi · 猫咪 Demo</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap');
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --purple: #B39DFF;
+    --black: #1a1a1a;
+    --gray: #999;
+    --light-gray: #c0c0c0;
+  }
+
+  body {
+    background: #fff;
+    height: 100dvh;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    font-family: 'Inter', 'Noto Sans SC', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+  }
+
+  .stage {
+    position: absolute;
+    inset: 0;
+    background: #fff;
+  }
+  .stage video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .stage video.hidden { opacity: 0; pointer-events: none; }
+
+  .overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  .text-block {
+    position: absolute;
+    opacity: 0;
+    transition: opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .text-block.active { opacity: 1; }
+
+  /* ── Shared styles ── */
+  .logo {
+    position: absolute;
+    top: 3vh; left: 2vw;
+    font-weight: 800;
+    font-size: clamp(1rem, 2.2vw, 1.4rem);
+    color: var(--black);
+    z-index: 10;
+    letter-spacing: -0.02em;
+  }
+  .logo .accent { color: var(--purple); }
+
+  .title { font-weight: 900; line-height: 1.05; letter-spacing: -0.03em; }
+  .title .dark { color: var(--black); }
+  .title .accent { color: var(--purple); }
+
+  .desc {
+    font-weight: 400;
+    color: var(--gray);
+    line-height: 1.6;
+  }
+
+  .tag-label {
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    color: var(--gray);
+  }
+
+  .tag-pill {
+    display: inline-block;
+    font-weight: 600;
+    font-size: clamp(0.55rem, 0.95vw, 0.7rem);
+    letter-spacing: 0.04em;
+    padding: 0.25em 0.65em;
+    border-radius: 999px;
+    background: var(--black);
+    color: #fff;
+  }
+
+  .val-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .val-num {
+    font-weight: 900;
+    color: var(--purple);
+    letter-spacing: -0.02em;
+  }
+  .val-label {
+    font-weight: 600;
+    color: var(--black);
+    letter-spacing: -0.01em;
+  }
+
+  .card {
+    background: #fff;
+    border: 1px solid #eee;
+    border-radius: 0.6em;
+    padding: clamp(0.4rem, 1vw, 0.7rem) clamp(0.5rem, 1.2vw, 1rem);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+    text-align: center;
+  }
+  .card .card-title { font-weight: 700; color: var(--black); margin-bottom: 0.2em; }
+  .card ul { list-style: none; color: var(--gray); line-height: 1.7; }
+
+  .stamp {
+    border: 1.5px solid var(--light-gray);
+    border-radius: 0.5em;
+    padding: 0.4em 0.6em;
+    text-align: center;
+    color: var(--gray);
+    letter-spacing: 0.03em;
+    transform: rotate(-6deg);
+    line-height: 1.4;
+  }
+
+  .sparkle {
+    position: absolute;
+    color: var(--purple);
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  @media (max-width: 768px) {
+    .logo { top: 2vh; left: 3vw; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stage video { transition: opacity 0.2s linear; }
+    .text-block { transition: opacity 0.2s linear; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="logo" id="logo">M<span class="accent">o</span>chi</div>
+
+  <div class="stage" id="stage">
+    <video id="loopVideo" src="" loop muted playsinline></video>
+    <video id="transVideo" src="" muted playsinline class="hidden"></video>
+  </div>
+
+  <div class="overlay" id="overlay"></div>
+</div>
+
+<script>
+(function() {
+  const VIDEO_BASE = '/Users/robinxie/Desktop/猫咪demo切图/Video/';
+
+  const sections = [
+    {
+      id: '01', loop: '01.mp4', trans: '01转场.mp4',
+      html: `
+        <div class="text-block" style="top:48%;right:5vw;font-size:clamp(1.2rem,2.2vw,1.6rem);">
+          <div class="val-row">
+            <div class="val-num" style="font-size:clamp(1.8rem,3.5vw,2.4rem);">0.5</div>
+            <div class="val-label" style="font-size:clamp(0.8rem,1.6vw,1.1rem);">years</div>
+          </div>
+          <div class="desc" style="font-size:clamp(0.5rem,0.85vw,0.7rem);max-width:13vw;margin-top:0.3em;">永远 0.5 岁<br>不会长大，也不用长大。</div>
+        </div>
+        <div class="text-block" style="top:72%;right:5vw;font-size:clamp(1.2rem,2.2vw,1.6rem);">
+          <div class="val-row">
+            <div class="val-num" style="font-size:clamp(1.8rem,3.5vw,2.4rem);">100%</div>
+            <div class="val-label" style="font-size:clamp(0.8rem,1.6vw,1.1rem);">Fluff Index</div>
+          </div>
+          <div class="desc" style="font-size:clamp(0.5rem,0.85vw,0.7rem);max-width:13vw;margin-top:0.3em;">一只纯度极高的布偶猫。<br>掉毛含量 100%<br>情绪含量也差不多</div>
+        </div>
+        <div class="text-block" style="top:44%;left:3vw;font-size:clamp(0.5rem,0.85vw,0.7rem);max-width:14vw;">
+          <div class="desc">身高不到一个键盘<br>体重介于一杯拿铁和一吨卡车之间<br>项圈是紫色的——因为是本喵的幸运色。</div>
+          <div style="margin-top:0.8em;">
+            <span class="tag-pill">Say hi to Mochi!</span>
+          </div>
+        </div>
+        <div class="text-block" style="bottom:4vh;left:3vw;">
+          <span class="tag-label" style="font-size:clamp(0.4rem,0.7vw,0.6rem);">IG <span style="color:var(--black);">X</span> RED</span>
+        </div>
+      `
+    },
+    {
+      id: '02', loop: '02.mp4', trans: '02转场.mp4',
+      html: `
+        <div class="text-block" style="top:11%;left:4vw;">
+          <span class="tag-label" style="font-size:clamp(0.55rem,0.95vw,0.75rem);">* Close enough</span>
+        </div>
+        <div class="text-block" style="top:17%;left:4vw;">
+          <div class="title" style="font-size:clamp(2.2rem,6.5vw,5rem);">
+            <span class="dark">脸颊是粉的</span><br><span class="dark">因为我</span><span class="accent">害羞</span><span class="dark">了</span>
+          </div>
+        </div>
+        <div class="text-block" style="top:68%;left:4vw;max-width:20vw;">
+          <div class="desc" style="font-size:clamp(0.5rem,0.8vw,0.7rem);">你离得有点太近了。别看了<br>再看就要出现脸红bug——<br>咳没来得及。</div>
+        </div>
+      `
+    },
+    {
+      id: '03', loop: '03.mp4', trans: '03转场.mp4',
+      html: `
+        <div class="text-block" style="top:10%;left:4vw;">
+          <span class="tag-label" style="font-size:clamp(0.55rem,0.95vw,0.75rem);">* Daily moment · 03</span>
+        </div>
+        <div class="text-block" style="top:18%;left:7vw;">
+          <div class="title" style="font-size:clamp(2.8rem,8vw,6rem);">
+            <span class="dark">The art of</span><br><span class="dark">just </span><span class="accent">sitting.</span>
+          </div>
+        </div>
+        <div class="text-block" style="top:48%;right:4vw;max-width:14vw;">
+          <div class="desc" style="font-size:clamp(0.5rem,0.8vw,0.7rem);">"Why does the sunlight move across the floor?"<br>— Mochi, probably</div>
+        </div>
+        <div class="text-block" style="top:69%;left:4vw;max-width:18vw;">
+          <div class="desc" style="font-size:clamp(0.5rem,0.8vw,0.7rem);">尾巴卷成一个问号，又像一个逗号。<br>其实两个都不是——我只是在思考<br>一些很深奥的猫科哲学问题。</div>
+        </div>
+      `
+    },
+    {
+      id: '04', loop: '04.mp4', trans: '04转场.mp4',
+      html: `
+        <div class="text-block" style="top:12%;left:4vw;">
+          <span class="tag-label" style="font-size:clamp(0.55rem,0.95vw,0.75rem);color:var(--black);">+ Live · Paw Licking</span>
+        </div>
+        <div class="text-block" style="top:9%;right:12vw;">
+          <div style="font-weight:800;font-size:clamp(1.4rem,2.4vw,1.8rem);letter-spacing:-0.02em;">
+            <span class="dark">12:</span><span class="accent">00</span> <span class="dark">PM</span>
+          </div>
+        </div>
+        <div class="text-block" style="top:33%;right:16vw;">
+          <div class="title" style="font-size:clamp(6rem,16vw,12rem);"><span class="accent">Oops.</span></div>
+        </div>
+        <div class="text-block" style="top:58%;right:3vw;max-width:18vw;">
+          <div class="desc" style="font-size:clamp(0.5rem,0.8vw,0.7rem);">刚才那几秒你看到了是吧？<br>假装没看到——每天中午12点<br>准时上演的舔爪失误秀<br>欢迎收看，但请不要笑太大声。</div>
+        </div>
+        <div class="text-block" style="bottom:4vh;right:3vw;">
+          <span class="tag-label" style="font-size:clamp(0.4rem,0.65vw,0.55rem);">EP.047 · Daily fail</span>
+        </div>
+      `
+    },
+    {
+      id: '05', loop: '05.mp4', trans: '05转场.mp4',
+      html: `
+        <div class="text-block" style="top:6%;left:5vw;">
+          <div style="font-weight:700;font-size:clamp(1.2rem,2vw,1.5rem);letter-spacing:-0.02em;">
+            <span class="dark">2:54</span><span class="accent">pm</span>
+          </div>
+          <span class="tag-label" style="font-size:clamp(0.4rem,0.65vw,0.55rem);">· Sunny · 25° · April</span>
+        </div>
+        <div class="text-block" style="top:18%;left:3vw;">
+          <div class="title" style="font-size:clamp(3rem,7vw,5rem);"><span class="dark">Yawn</span></div>
+        </div>
+        <div class="text-block" style="top:35%;left:3vw;">
+          <div class="title" style="font-size:clamp(4rem,9vw,7rem);"><span class="accent">#42.</span></div>
+        </div>
+        <div class="text-block" style="top:70%;right:6vw;">
+          <div class="card" style="font-size:clamp(0.55rem,0.9vw,0.7rem);">
+            <div class="card-title" style="font-size:clamp(0.65rem,1vw,0.8rem);">最佳好友</div>
+            <ul><li>— 不会说话</li><li>— 不会撒</li><li>— 不会抢我的粮</li><li>— 完美室友</li></ul>
+          </div>
+        </div>
+        <div class="text-block" style="top:73%;left:3vw;max-width:16vw;">
+          <div class="desc" style="font-size:clamp(0.45rem,0.7vw,0.6rem);">每天下午三点，准时打哈欠。<br>这是一个科学未解之谜。</div>
+        </div>
+      `
+    },
+    {
+      id: '06', loop: '06.mp4', trans: '06转场.mp4',
+      html: `
+        <div class="text-block" style="top:20%;left:3vw;">
+          <div style="font-weight:600;font-size:clamp(0.55rem,0.9vw,0.7rem);color:var(--purple);">#98BAFF</div>
+          <span class="tag-label" style="font-size:clamp(0.4rem,0.6vw,0.55rem);">My signature color</span>
+        </div>
+        <div class="text-block" style="top:18%;right:8vw;">
+          <div class="title" style="font-size:clamp(2.8rem,7vw,5rem);text-align:right;"><span class="dark">Yarn &</span></div>
+        </div>
+        <div class="text-block" style="top:35%;right:8vw;">
+          <div class="title" style="font-size:clamp(3.5rem,9vw,6.5rem);text-align:right;"><span class="accent">collar.</span></div>
+        </div>
+        <div class="text-block" style="top:68%;right:6vw;max-width:14vw;">
+          <div class="desc" style="font-size:clamp(0.5rem,0.8vw,0.7rem);text-align:right;">毛线球是紫色项圈的完美搭档<br>材质柔软，线头整齐<br>但抓一下就全完了。</div>
+        </div>
+        <div class="text-block" style="bottom:5vh;left:3vw;">
+          <div style="font-size:clamp(0.6rem,1vw,0.8rem);letter-spacing:-0.01em;">
+            <span class="accent" style="font-weight:800;">∞</span><span class="dark" style="font-weight:600;"> hours</span>
+          </div>
+          <span class="tag-label" style="font-size:clamp(0.4rem,0.6vw,0.55rem);">Time spent</span>
+        </div>
+      `
+    },
+    {
+      id: '07', loop: '07.mp4', trans: '07转场.mp4',
+      html: `
+        <div class="text-block" style="top:7%;left:3vw;">
+          <span class="tag-label" style="font-size:clamp(0.5rem,0.8vw,0.6rem);">Let's be friends</span>
+        </div>
+        <div class="text-block" style="top:8%;left:50%;transform:translateX(-50%);">
+          <div class="title" style="font-size:clamp(3.5rem,9vw,7rem);text-align:center;">
+            <span class="dark">Hi-</span><span class="accent">five!</span>
+          </div>
+        </div>
+        <div class="sparkle" style="top:12%;right:10vw;font-size:clamp(1rem,2.5vw,2rem);">✦</div>
+        <div class="sparkle" style="top:50%;left:8vw;font-size:clamp(0.8rem,2vw,1.5rem);">✦</div>
+        <div class="sparkle" style="top:22%;right:22vw;font-size:clamp(0.6rem,1.4vw,1rem);">✦</div>
+        <div class="text-block" style="top:68%;left:3vw;max-width:18vw;">
+          <div class="desc" style="font-size:clamp(0.5rem,0.8vw,0.7rem);">双爪奉上的击掌，限量发行<br>每天只给三次。错过了就等明天吧<br>你可能不会等——但它会记得。</div>
+          <div style="margin-top:0.6em;">
+            <span class="tag-pill" style="font-size:clamp(0.5rem,0.8vw,0.65rem);">Limited · 3 / day</span>
+          </div>
+        </div>
+        <div class="text-block" style="bottom:3vh;right:3vw;">
+          <span class="tag-label" style="font-size:clamp(0.4rem,0.65vw,0.55rem);">Signature move · 07</span>
+        </div>
+      `
+    },
+    {
+      id: '08', loop: '08.mp4',
+      html: `
+        <div class="text-block" style="top:7%;left:4vw;">
+          <span class="tag-label" style="font-size:clamp(0.5rem,0.8vw,0.6rem);">The sweet ending</span>
+        </div>
+        <div class="text-block" style="top:15%;left:3vw;">
+          <div class="title" style="font-size:clamp(2.2rem,5.5vw,4rem);max-width:35vw;">
+            <span class="dark">But if you brought </span><span class="accent">snacks...</span>
+          </div>
+        </div>
+        <div class="text-block" style="top:10%;right:6vw;">
+          <div class="stamp" style="font-size:clamp(0.4rem,0.6vw,0.5rem);">
+            Gathered<br>Mochi<br>2024 . 08 16
+          </div>
+        </div>
+        <div class="text-block" style="top:55%;left:3vw;max-width:20vw;">
+          <div class="desc" style="font-size:clamp(0.5rem,0.8vw,0.7rem);">一切原则在零食面前都会失效。<br>尤其是金豆芽。你懂的。</div>
+        </div>
+        <div class="text-block" style="bottom:6vh;right:6vw;">
+          <div style="font-weight:600;font-size:clamp(0.6rem,1vw,0.8rem);color:var(--black);letter-spacing:-0.01em;">— with love, Mochi 🐾</div>
+        </div>
+      `
+    },
+  ];
+
+  const loopVideo = document.getElementById('loopVideo');
+  const transVideo = document.getElementById('transVideo');
+  const overlay = document.getElementById('overlay');
+
+  let currentIndex = 0;
+  let isTransitioning = false;
+  let scrollAccumulator = 0;
+  const SCROLL_THRESHOLD = 40;
+
+  function renderOverlay(index) {
+    overlay.innerHTML = sections[index].html;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        overlay.querySelectorAll('.text-block').forEach(el => el.classList.add('active'));
+      });
+    });
+  }
+
+  function hideAllMedia() {
+    loopVideo.classList.add('hidden');
+    transVideo.classList.add('hidden');
+    loopVideo.pause();
+    transVideo.pause();
+  }
+
+  function showLoop(sec) {
+    hideAllMedia();
+    loopVideo.src = VIDEO_BASE + sec.loop;
+    loopVideo.classList.remove('hidden');
+    loopVideo.currentTime = 0;
+    loopVideo.play().catch(() => {});
+  }
+
+  function playTransition(sec) {
+    if (!sec.trans) return;
+    isTransitioning = true;
+    overlay.querySelectorAll('.text-block').forEach(el => el.classList.remove('active'));
+
+    transVideo.src = VIDEO_BASE + sec.trans;
+    transVideo.classList.remove('hidden');
+    transVideo.currentTime = 0;
+    transVideo.playbackRate = 4;
+    transVideo.play().catch(() => {});
+
+    transVideo.onended = () => {
+      transVideo.classList.add('hidden');
+      transVideo.onended = null;
+      isTransitioning = false;
+      showLoop(sections[currentIndex]);
+      renderOverlay(currentIndex);
+    };
+  }
+
+  function advance() {
+    if (isTransitioning) return;
+    const sec = sections[currentIndex];
+    if (currentIndex < sections.length - 1 && sec.trans) {
+      playTransition(sec);
+      currentIndex++;
+    }
+  }
+
+  window.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    scrollAccumulator += e.deltaY;
+    if (scrollAccumulator > SCROLL_THRESHOLD) {
+      scrollAccumulator = 0;
+      advance();
+    }
+  }, { passive: false });
+
+  let touchStartY = 0;
+  window.addEventListener('touchstart', (e) => { touchStartY = e.touches[0].clientY; }, { passive: true });
+  window.addEventListener('touchend', (e) => {
+    if (touchStartY - e.changedTouches[0].clientY > 40) advance();
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') advance();
+  });
+
+  showLoop(sections[0]);
+  renderOverlay(0);
+})();
+</script>
+
+</body>
+</html>
